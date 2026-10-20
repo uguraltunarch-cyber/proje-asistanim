@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Markdown Dönüştürücü</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F2F4F6; --panel:#FFFFFF; --ink:#1C2733; --muted:#5F6B77; --line:#D6DDE3;
+  --accent:#2F5D8A; --accent-ink:#FFFFFF; --accent-soft:#E3ECF5;
+  --ok:#2E7D4F; --warn:#9A5B00; --err:#B3261E; --code:#F7F9FA;
+  --sans:"IBM Plex Sans","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+  --mono:"IBM Plex Mono",Consolas,"Courier New",monospace;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#151B22; --panel:#1D252E; --ink:#E4E9EE; --muted:#9AA6B2; --line:#303B47;
+    --accent:#6FA0D2; --accent-ink:#0F1822; --accent-soft:#233447;
+    --ok:#6BC28F; --warn:#E0A64A; --err:#F08A80; --code:#171E26;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#151B22; --panel:#1D252E; --ink:#E4E9EE; --muted:#9AA6B2; --line:#303B47;
+  --accent:#6FA0D2; --accent-ink:#0F1822; --accent-soft:#233447;
+  --ok:#6BC28F; --warn:#E0A64A; --err:#F08A80; --code:#171E26;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 40px}
+h1{font-size:26px;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
+.lead{color:var(--muted);margin:0 0 22px;max-width:70ch}
+.grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:18px}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.drop{border:2px dashed var(--line);border-radius:8px;padding:26px 16px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop strong{display:block;font-size:16px;font-weight:600;margin-bottom:4px}
+.drop span{color:var(--muted);font-size:13px}
+.drop:focus-visible,button:focus-visible,.file:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.opts{display:flex;flex-wrap:wrap;gap:6px 18px;margin:14px 0 4px;font-size:14px}
+.opts label{display:flex;gap:7px;align-items:center;cursor:pointer}
+.head{display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px}
+.head h2{font-size:15px;font-weight:600;margin:0}
+.count{color:var(--muted);font-size:13px}
+.files{list-style:none;margin:0;padding:0;max-height:430px;overflow:auto;border-top:1px solid var(--line)}
+.file{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 6px;border-bottom:1px solid var(--line);cursor:pointer}
+.file:hover{background:var(--accent-soft)}
+.file.sel{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.ext{font:500 11px/1 var(--mono);padding:5px 6px;border-radius:4px;background:var(--code);border:1px solid var(--line);color:var(--muted);min-width:44px;text-align:center}
+.fname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.fstat{font-size:12px;color:var(--muted);white-space:nowrap}
+.fstat.ok{color:var(--ok)} .fstat.warn{color:var(--warn)} .fstat.err{color:var(--err)}
+.empty{color:var(--muted);font-size:14px;padding:18px 4px}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+button{font:500 14px/1 var(--sans);padding:10px 14px;border-radius:7px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+button:hover:not(:disabled){border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.prevhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.prevhead h2{font-size:15px;font-weight:600;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.notice{font-size:13px;border-radius:7px;padding:10px 12px;margin-bottom:10px;display:none}
+.notice.show{display:block}
+.notice.warn{background:color-mix(in srgb,var(--warn) 12%,transparent);color:var(--warn)}
+.notice.err{background:color-mix(in srgb,var(--err) 12%,transparent);color:var(--err)}
+textarea{width:100%;min-height:520px;resize:vertical;font:13px/1.55 var(--mono);color:var(--ink);background:var(--code);border:1px solid var(--line);border-radius:8px;padding:12px;white-space:pre;overflow:auto}
+.progress{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:12px}
+.progress>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.status{font-size:13px;color:var(--muted);margin-top:6px;min-height:1.5em}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:7px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+.foot{color:var(--muted);font-size:13px;margin-top:18px;max-width:80ch}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Markdown Dönüştürücü</h1>
+  <p class="lead">PDF, Word, Excel, PowerPoint ve HTML dosyalarını AnythingLLM gibi yapay zeka araçlarına uygun Markdown metnine çevirir. Kurulum gerekmez; dosyalar bilgisayarınızdan çıkmaz, çeviri tarayıcıda yapılır.</p>
+
+  <div class="grid">
+    <section class="panel">
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Dosya seç">
+        <strong>Dosyaları buraya bırakın</strong>
+        <span>ya da tıklayıp seçin · PDF, DOCX, XLSX, XLS, CSV, PPTX, HTML, TXT</span>
+      </div>
+      <input type="file" id="picker" multiple hidden
+        accept=".pdf,.docx,.xlsx,.xls,.csv,.pptx,.html,.htm,.txt,.md,.json,.xml">
+
+      <div class="opts">
+        <label><input type="checkbox" id="optPages"> Sayfa numaralarını ekle (PDF)</label>
+        <label><input type="checkbox" id="optHead" checked> Başlıkları tanı (PDF)</label>
+      </div>
+
+      <div class="head">
+        <h2>Dosyalar</h2>
+        <span class="count" id="count">0 dosya</span>
+      </div>
+      <ul class="files" id="files"><li class="empty">Henüz dosya eklenmedi.</li></ul>
+
+      <div class="progress" aria-hidden="true"><i id="bar"></i></div>
+      <div class="status" id="status" aria-live="polite"></div>
+
+      <div class="btns">
+        <button class="primary" id="btnAllMd" disabled>Hepsini tek .md olarak indir</button>
+        <button id="btnZip" disabled>Ayrı ayrı indir (.zip)</button>
+        <button id="btnClear" disabled>Listeyi temizle</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="prevhead">
+        <h2 id="prevTitle">Önizleme</h2>
+        <div class="btns" style="margin:0">
+          <button id="btnCopy" disabled>Kopyala</button>
+          <button class="primary" id="btnOne" disabled>.md indir</button>
+        </div>
+      </div>
+      <div class="notice" id="notice"></div>
+      <textarea id="out" readonly placeholder="Bir dosya ekleyin; çevrilen metin burada görünür."></textarea>
+    </section>
+  </div>
+
+  <p class="foot">Taranmış PDF'lerde (sayfaları fotoğraf olan) metin bulunmadığı için çıktı boş gelir; bunlar için önce OCR gerekir. PDF'teki tablolar düz satırlara dönüşebilir; Word ve Excel tabloları ise Markdown tablosu olarak korunur.</p>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/turndown@7.2.0/dist/turndown.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/turndown-plugin-gfm@1.0.2/dist/turndown-plugin-gfm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const items = [];           // {id, file, name, ext, status, md, note, level}
+let selected = null, busy = false, downloads = null, uid = 0;
+// Claude dışında (bilgisayara indirilmiş dosya olarak) açıldıysa normal tarayıcı indirmesi kullanılır
+const LOCAL = !(window.claude && typeof window.claude.use === "function");
+if (LOCAL) downloads = { local: true };
+
+// ---------- indirme yeteneği ----------
+try {
+  if (!LOCAL) {
+    window.claude.use("downloads").then(d => { downloads = d; refreshButtons(); }).catch(()=>{});
+  }
+} catch(e) {}
+
+// ---------- yardımcılar ----------
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),2200); }
+function setStatus(msg){ $("status").textContent = msg || ""; }
+function setBar(frac){ $("bar").style.width = Math.round(Math.max(0,Math.min(1,frac))*100) + "%"; }
+function extOf(n){ const i=n.lastIndexOf("."); return i<0 ? "" : n.slice(i+1).toLowerCase(); }
+function baseOf(n){ const i=n.lastIndexOf("."); return i<0 ? n : n.slice(0,i); }
+function readBuf(f){ return f.arrayBuffer(); }
+function readText(f){ return f.text(); }
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+let td = null;
+function turndown(){
+  if (td) return td;
+  td = new TurndownService({headingStyle:"atx", bulletListMarker:"-", codeBlockStyle:"fenced", emDelimiter:"*"});
+  if (window.turndownPluginGfm) td.use(turndownPluginGfm.gfm);
+  td.remove(["script","style","noscript"]);
+  return td;
+}
+function cleanMd(s){
+  return s.replace(/\r\n?/g,"\n").replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim() + "\n";
+}
+function cell(v){ return String(v ?? "").replace(/\|/g,"\\|").replace(/\r?\n/g," ").trim(); }
+
+// ---------- PDF ----------
+async function pdfToMd(buf, onPage){
+  if (!window.pdfjsLib) throw new Error("PDF okuyucu yüklenemedi (internet bağlantısını kontrol edin).");
+  const doc = await pdfjsLib.getDocument({data:new Uint8Array(buf), isEvalSupported:false}).promise;
+  const withPages = $("optPages").checked, detectHead = $("optHead").checked;
+  const pages = [], sizeHist = new Map();
+  let emptyPages = 0;
+
+  for (let p = 1; p <= doc.numPages; p++){
+    const page = await doc.getPage(p);
+    const tc = await page.getTextContent();
+    const its = [];
+    for (const it of tc.items){
+      if (!("str" in it) || !it.str) continue;
+      const size = Math.abs(it.transform[3]) || Math.hypot(it.transform[2], it.transform[3]) || it.height || 10;
+      its.push({s:it.str, x:it.transform[4], y:it.transform[5], w:it.width||0, size, eol:!!it.hasEOL});
+    }
+    // satırlara grupla
+    its.sort((a,b)=> (b.y - a.y) || (a.x - b.x));
+    const lines = [];
+    for (const it of its){
+      const L = lines.length ? lines[lines.length-1] : null;
+      if (L && Math.abs(L.y - it.y) <= Math.max(L.size, it.size) * 0.5){ L.items.push(it); L.size = Math.max(L.size, it.size); }
+      else lines.push({y:it.y, size:it.size, items:[it]});
+    }
+    const out = [];
+    let chars = 0;
+    for (const L of lines){
+      L.items.sort((a,b)=>a.x-b.x);
+      let txt = "", prev = null;
+      for (const it of L.items){
+        if (prev){
+          const gap = it.x - (prev.x + prev.w);
+          if (gap > it.size*0.18 && !/\s$/.test(txt) && !/^\s/.test(it.s)) txt += " ";
+        }
+        txt += it.s; prev = it;
+      }
+      txt = txt.replace(/\s+/g," ").trim();
+      if (!txt) continue;
+      chars += txt.length;
+      const k = Math.round(L.size*2)/2;
+      sizeHist.set(k, (sizeHist.get(k)||0) + txt.length);
+      out.push({t:txt, y:L.y, size:L.size});
+    }
+    if (chars < 15) emptyPages++;
+    pages.push(out);
+    page.cleanup();
+    if (onPage) onPage(p, doc.numPages);
+    if (p % 5 === 0) await tick();
+  }
+
+  // gövde yazı boyutu = en çok karakter taşıyan boyut
+  let body = 10, best = -1;
+  for (const [k,v] of sizeHist) if (v > best){ best = v; body = k; }
+
+  const md = [];
+  pages.forEach((lines, idx) => {
+    if (withPages) md.push(`\n<!-- Sayfa ${idx+1} -->\n`);
+    let para = "", last = null;
+    const flush = () => { if (para){ md.push(para.trim()); md.push(""); para = ""; } };
+    for (const L of lines){
+      const ratio = L.size / body;
+      const isHead = detectHead && ratio >= 1.25 && L.t.length <= 140 && /[A-Za-zÇĞİÖŞÜçğıöşü0-9]/.test(L.t);
+      const bullet = /^[•▪●◦■□►–—\-\*]\s+/.test(L.t);
+      if (isHead){
+        flush();
+        const prevLine = md.length ? md[md.length-1] === "" ? md[md.length-2] : md[md.length-1] : "";
+        const level = ratio >= 1.7 ? "#" : ratio >= 1.4 ? "##" : "###";
+        // aynı boyuttaki ardışık başlık satırlarını birleştir
+        if (last && last.head && Math.abs(last.size - L.size) < 0.6 && (last.y - L.y) < L.size*1.8 && typeof prevLine === "string" && prevLine.startsWith(level+" ")){
+          const i = md.lastIndexOf(prevLine); md[i] = prevLine + " " + L.t;
+        } else { md.push(`${level} ${L.t}`); md.push(""); }
+        last = {y:L.y, size:L.size, head:true};
+        continue;
+      }
+      const gap = last ? (last.y - L.y) : 0;
+      const newPara = !last || last.head || gap > L.size*1.65 || gap < 0 || bullet;
+      if (newPara) flush();
+      if (bullet){ md.push("- " + L.t.replace(/^[•▪●◦■□►–—\-\*]\s+/,"")); last = {y:L.y,size:L.size,head:false,bullet:true}; continue; }
+      if (last && last.bullet && !newPara && md.length){ md[md.length-1] += " " + L.t; last = {y:L.y,size:L.size,head:false,bullet:true}; continue; }
+      if (para && /[A-Za-zÇĞİÖŞÜçğıöşü]-$/.test(para)) para = para.slice(0,-1) + L.t;
+      else para += (para ? " " : "") + L.t;
+      last = {y:L.y, size:L.size, head:false};
+    }
+    flush();
+  });
+
+  let note = null, level = null;
+  const frac = emptyPages / Math.max(1, doc.numPages);
+  if (frac >= 0.8){ level = "warn"; note = `${doc.numPages} sayfanın ${emptyPages} tanesinde okunabilir metin yok. Bu PDF büyük ihtimalle taranmış (sayfalar fotoğraf); metne çevirmek için önce OCR gerekir.`; }
+  else if (emptyPages > 0){ level = "warn"; note = `${emptyPages} sayfada metin bulunamadı (resim veya taranmış sayfa olabilir).`; }
+  await doc.destroy();
+  return {md: cleanMd(md.join("\n")), note, level, scanned: frac >= 0.8};
+}
+
+// ---------- Word ----------
+async function docxToMd(buf){
+  if (!window.mammoth) throw new Error("Word okuyucu yüklenemedi.");
+  const r = await mammoth.convertToHtml({arrayBuffer:buf}, {convertImage: mammoth.images.imgElement(()=>Promise.resolve({src:""}))});
+  const html = r.value.replace(/<img[^>]*>/g,"");
+  return {md: cleanMd(turndown().turndown(html))};
+}
+
+// ---------- Excel / CSV ----------
+async function sheetToMd(buf, isCsv, text){
+  if (!window.XLSX) throw new Error("Excel okuyucu yüklenemedi.");
+  const wb = isCsv ? XLSX.read(text, {type:"string", raw:false}) : XLSX.read(new Uint8Array(buf), {type:"array", cellDates:true});
+  const parts = [];
+  for (const name of wb.SheetNames){
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, defval:"", raw:false, blankrows:false});
+    const trimmed = rows.map(r => r.map(cell)).filter(r => r.some(c => c !== ""));
+    if (!trimmed.length) continue;
+    let w = 0;
+    for (const r of trimmed){ for (let i=r.length-1;i>=0;i--){ if (r[i] !== ""){ w = Math.max(w, i+1); break; } } }
+    // tamamen boş sütunları at
+    const keep = [];
+    for (let c=0;c<w;c++) if (trimmed.some(r => (r[c]||"") !== "")) keep.push(c);
+    const tbl = trimmed.map(r => keep.map(c => r[c] || ""));
+    if (!isCsv || wb.SheetNames.length > 1) parts.push(`## ${name}\n`);
+    parts.push("| " + tbl[0].map(c => c || " ").join(" | ") + " |");
+    parts.push("| " + keep.map(()=> "---").join(" | ") + " |");
+    for (const r of tbl.slice(1)) parts.push("| " + r.join(" | ") + " |");
+    parts.push("");
+  }
+  return {md: cleanMd(parts.join("\n") || "")};
+}
+
+// ---------- PowerPoint ----------
+async function pptxToMd(buf){
+  if (!window.JSZip) throw new Error("PowerPoint okuyucu yüklenemedi.");
+  const zip = await JSZip.loadAsync(buf);
+  const slides = Object.keys(zip.files).filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+    .sort((a,b)=> parseInt(a.match(/\d+/)[0]) - parseInt(b.match(/\d+/)[0]));
+  const A = "http://schemas.openxmlformats.org/drawingml/2006/main";
+  const P = "http://schemas.openxmlformats.org/presentationml/2006/main";
+  const parser = new DOMParser(), out = [];
+  for (let i=0;i<slides.length;i++){
+    const xml = parser.parseFromString(await zip.file(slides[i]).async("string"), "application/xml");
+    let title = "", body = [];
+    for (const sp of Array.from(xml.getElementsByTagNameNS(P, "sp"))){
+      const ph = sp.getElementsByTagNameNS(P, "ph")[0];
+      const type = ph ? (ph.getAttribute("type") || "") : "";
+      const paras = Array.from(sp.getElementsByTagNameNS(A, "p")).map(p =>
+        Array.from(p.getElementsByTagNameNS(A, "t")).map(t => t.textContent).join("").trim()).filter(Boolean);
+      if (!paras.length) continue;
+      if ((type === "title" || type === "ctrTitle") && !title) title = paras.join(" ");
+      else body.push(...paras);
+    }
+    // tablolar
+    for (const tbl of Array.from(xml.getElementsByTagNameNS(A, "tbl"))){
+      const rows = Array.from(tbl.getElementsByTagNameNS(A, "tr")).map(tr =>
+        Array.from(tr.getElementsByTagNameNS(A, "tc")).map(tc =>
+          cell(Array.from(tc.getElementsByTagNameNS(A, "t")).map(t=>t.textContent).join(" "))));
+      if (rows.length){
+        body.push("");
+        body.push("| " + rows[0].join(" | ") + " |");
+        body.push("| " + rows[0].map(()=>"---").join(" | ") + " |");
+        rows.slice(1).forEach(r => body.push("| " + r.join(" | ") + " |"));
+        body.push("");
+      }
+    }
+    out.push(`## Slayt ${i+1}${title ? ": " + title : ""}\n`);
+    body.forEach(b => out.push(b === "" || b.startsWith("|") ? b : "- " + b));
+    out.push("");
+  }
+  return {md: cleanMd(out.join("\n"))};
+}
+
+// ---------- diğerleri ----------
+async function htmlToMd(text){
+  const d = new DOMParser().parseFromString(text, "text/html");
+  return {md: cleanMd(turndown().turndown(d.body ? d.body.innerHTML : text))};
+}
+
+async function convert(item){
+  const f = item.file, e = item.ext;
+  const onPage = (p,n) => { item.status = `Sayfa ${p}/${n}`; renderList(); setStatus(`${item.name}: sayfa ${p}/${n}`); };
+  switch (e){
+    case "pdf":  return pdfToMd(await readBuf(f), onPage);
+    case "docx": return docxToMd(await readBuf(f));
+    case "xlsx": case "xls": return sheetToMd(await readBuf(f), false);
+    case "csv":  return sheetToMd(null, true, await readText(f));
+    case "pptx": return pptxToMd(await readBuf(f));
+    case "html": case "htm": return htmlToMd(await readText(f));
+    case "json": { const t = await readText(f); let s=t; try{ s = JSON.stringify(JSON.parse(t), null, 2); }catch(_){} return {md: "```json\n" + s + "\n```\n"}; }
+    case "xml":  return {md: "```xml\n" + (await readText(f)) + "\n```\n"};
+    case "txt": case "md": return {md: cleanMd(await readText(f))};
+    case "doc":  throw new Error("Eski .doc biçimi desteklenmiyor. Word'de açıp .docx olarak kaydedin.");
+    case "ppt":  throw new Error("Eski .ppt biçimi desteklenmiyor. PowerPoint'te açıp .pptx olarak kaydedin.");
+    default: throw new Error("Bu dosya türü desteklenmiyor.");
+  }
+}
+
+// ---------- kuyruk ----------
+function addFiles(list){
+  let n = 0;
+  for (const f of list){
+    if (items.some(it => it.name === f.name && it.file.size === f.size)) continue;
+    items.push({id:++uid, file:f, name:f.name, ext:extOf(f.name), status:"Bekliyor", cls:"", md:null, note:null, level:null});
+    n++;
+  }
+  if (!n) { toast("Yeni dosya eklenmedi"); return; }
+  if (!selected) selected = items[0].id;
+  renderList(); runQueue();
+}
+
+async function runQueue(){
+  if (busy) return;
+  busy = true; refreshButtons();
+  const todo = items.filter(it => it.md === null && it.cls !== "err");
+  let done = 0;
+  for (const it of todo){
+    it.status = "Çevriliyor…"; it.cls = ""; renderList();
+    setStatus(`${it.name} çevriliyor…`);
+    await tick();
+    try {
+      const r = await convert(it);
+      it.md = r.md || ""; it.note = r.note || null; it.level = r.level || null;
+      if (r.scanned || !it.md.trim()){ it.status = "Metin yok"; it.cls = "warn"; if (!it.note){ it.note = "Bu dosyadan metin çıkmadı."; it.level = "warn"; } }
+      else { it.status = `Hazır · ${it.md.length.toLocaleString("tr-TR")} karakter`; it.cls = it.note ? "warn" : "ok"; }
+    } catch(err){
+      it.md = null; it.status = "Hata"; it.cls = "err";
+      it.note = (err && err.message) ? err.message : "Dosya okunamadı."; it.level = "err";
+    }
+    done++; setBar(done / todo.length);
+    renderList(); if (selected === it.id) renderPreview();
+  }
+  busy = false;
+  const ok = items.filter(i => i.md).length;
+  setStatus(ok ? `${ok} dosya hazır` : "");
+  setTimeout(()=> { if (!busy) setBar(0); }, 900);
+  refreshButtons(); renderPreview();
+}
+
+// ---------- görünüm ----------
+function renderList(){
+  const ul = $("files");
+  ul.textContent = "";
+  $("count").textContent = `${items.length} dosya`;
+  if (!items.length){ const li=document.createElement("li"); li.className="empty"; li.textContent="Henüz dosya eklenmedi."; ul.appendChild(li); return; }
+  for (const it of items){
+    const li = document.createElement("li");
+    li.className = "file" + (it.id === selected ? " sel" : "");
+    li.tabIndex = 0;
+    const ex = document.createElement("span"); ex.className="ext"; ex.textContent = (it.ext || "?").toUpperCase();
+    const nm = document.createElement("span"); nm.className="fname"; nm.textContent = it.name; nm.title = it.name;
+    const st = document.createElement("span"); st.className="fstat " + (it.cls||""); st.textContent = it.status;
+    li.append(ex, nm, st);
+    const pick = () => { selected = it.id; renderList(); renderPreview(); };
+    li.addEventListener("click", pick);
+    li.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); pick(); } });
+    ul.appendChild(li);
+  }
+}
+
+function renderPreview(){
+  const it = items.find(i => i.id === selected);
+  const n = $("notice");
+  if (!it){ $("prevTitle").textContent = "Önizleme"; $("out").value = ""; n.className = "notice"; refreshButtons(); return; }
+  $("prevTitle").textContent = baseOf(it.name) + ".md";
+  $("out").value = it.md || "";
+  if (it.note){ n.textContent = it.note; n.className = "notice show " + (it.level || "warn"); }
+  else n.className = "notice";
+  refreshButtons();
+}
+
+function refreshButtons(){
+  const it = items.find(i => i.id === selected);
+  const has = !!(it && it.md && it.md.trim());
+  const anyMd = items.some(i => i.md && i.md.trim());
+  $("btnCopy").disabled = !has;
+  $("btnOne").disabled = !has || !downloads;
+  $("btnAllMd").disabled = !anyMd || busy || !downloads;
+  $("btnZip").disabled = !anyMd || busy || !downloads || !window.JSZip;
+  $("btnClear").disabled = !items.length || busy;
+  const tip = downloads ? "" : "İndirme bu görünümde kullanılamıyor; Kopyala düğmesini kullanın.";
+  ["btnOne","btnAllMd","btnZip"].forEach(id => $(id).title = tip);
+}
+
+// ---------- indirme ----------
+async function save(filename, data){
+  if (!downloads){ toast("İndirme kullanılamıyor; Kopyala'yı kullanın"); return; }
+  if (downloads.local){
+    const blob = data instanceof Blob ? data : new Blob([data]);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast("İndirildi"); return;
+  }
+  try { await downloads.save({filename, data}); toast("İndirildi"); }
+  catch(e){
+    const c = e && e.code;
+    if (c === "declined") return;
+    if (c === "rate_limited") toast("Önceki indirme penceresi hâlâ açık");
+    else toast("İndirilemedi" + (e && e.message ? ": " + e.message : ""));
+  }
+}
+function safeName(n){ return n.replace(/[\\/:*?"<>|]+/g,"_"); }
+
+$("btnOne").addEventListener("click", () => {
+  const it = items.find(i => i.id === selected); if (!it || !it.md) return;
+  save(safeName(baseOf(it.name)) + ".md", new Blob([it.md], {type:"text/markdown"}));
+});
+$("btnAllMd").addEventListener("click", () => {
+  const ok = items.filter(i => i.md && i.md.trim()); if (!ok.length) return;
+  const text = ok.map(i => `# ${i.name}\n\n${i.md.trim()}\n`).join("\n\n---\n\n");
+  save(ok.length === 1 ? safeName(baseOf(ok[0].name)) + ".md" : "birlesik_belgeler.md", new Blob([text], {type:"text/markdown"}));
+});
+$("btnZip").addEventListener("click", async () => {
+  const ok = items.filter(i => i.md && i.md.trim()); if (!ok.length) return;
+  const zip = new JSZip(), used = new Set();
+  for (const i of ok){
+    let n = safeName(baseOf(i.name)) + ".md", k = 2;
+    while (used.has(n)) n = safeName(baseOf(i.name)) + ` (${k++}).md`;
+    used.add(n); zip.file(n, i.md);
+  }
+  const blob = await zip.generateAsync({type:"blob"});
+  save("markdown_dosyalari.zip", blob);
+});
+$("btnCopy").addEventListener("click", async () => {
+  const it = items.find(i => i.id === selected); if (!it || !it.md) return;
+  try { await navigator.clipboard.writeText(it.md); toast("Kopyalandı"); }
+  catch(_){ const ta=$("out"); ta.focus(); ta.select(); try{ document.execCommand("copy"); toast("Kopyalandı"); }catch(__){ toast("Metni seçip Ctrl+C ile kopyalayın"); } }
+});
+$("btnClear").addEventListener("click", () => {
+  items.length = 0; selected = null; setStatus(""); setBar(0); renderList(); renderPreview();
+});
+
+// ---------- dosya seçme / sürükle-bırak ----------
+const drop = $("drop"), picker = $("picker");
+drop.addEventListener("click", () => picker.click());
+drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); picker.click(); } });
+picker.addEventListener("change", () => { if (picker.files.length) addFiles(Array.from(picker.files)); picker.value = ""; });
+["dragenter","dragover"].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(ev => document.addEventListener(ev, e => { if (ev === "dragleave" && e.relatedTarget) return; drop.classList.remove("over"); }));
+document.addEventListener("drop", e => { e.preventDefault(); if (e.dataTransfer && e.dataTransfer.files.length) addFiles(Array.from(e.dataTransfer.files)); });
+
+renderList(); refreshButtons();
+})();
+</script>
+</body>
+</html>
